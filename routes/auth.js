@@ -4,51 +4,64 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User'); 
 const Voucher = require('../models/Voucher');
 
-// --- 📝 1. REGISTER ROUTE (First User = Admin Logic) ---
+// --- 📝 1. REGISTER ROUTE (Numeric Username & Sponsor Fix) ---
 router.post('/register', async (req, res) => {
     try {
-        const { username, email, password, dob, sponsorUsername } = req.body;
+        let { username, email, password, dob, sponsorUsername } = req.body;
+
+        // Clean & Format Data
+        username = username.toString().toLowerCase().trim();
+        email = email.toLowerCase().trim();
+        if (sponsorUsername) sponsorUsername = sponsorUsername.toString().toLowerCase().trim();
 
         const userCount = await User.countDocuments();
         let sponsor = null;
         let assignedRole = 'user';
 
+        // Pehla banda Admin banega
         if (userCount === 0) {
             assignedRole = 'admin';
         } else {
-            if (!sponsorUsername) return res.status(400).json({ message: "Sponsor is strictly required to register!" });
+            // Baqi sab ke liye sponsor laazmi hai
+            if (!sponsorUsername) {
+                return res.status(400).json({ success: false, message: "Sponsor is strictly required to register!" });
+            }
 
-            sponsor = await User.findOne({ username: sponsorUsername.toLowerCase() });
-            if (!sponsor) return res.status(404).json({ message: "Invalid Sponsor! Please enter a correct sponsor username." });
+            sponsor = await User.findOne({ username: sponsorUsername });
+            if (!sponsor) {
+                return res.status(404).json({ success: false, message: "Invalid Sponsor! Please enter a correct sponsor username." });
+            }
 
-            if (sponsor.username === 'admin' || sponsor.role === 'admin') {
+            // Admin sirf 1 referral link kar sakta hai
+            if (sponsor.role === 'admin') {
                 const adminReferralsCount = await User.countDocuments({ referredBy: sponsor._id });
                 if (adminReferralsCount >= 1) {
-                    return res.status(403).json({ message: "Admin has already sponsored their 1 allowed member! Please use another sponsor." });
+                    return res.status(403).json({ success: false, message: "Admin has already sponsored their 1 allowed member!" });
                 }
             }
         }
 
-        const existingUser = await User.findOne({ username: username.toLowerCase() });
-        if (existingUser) return res.status(400).json({ message: "Username already taken!" });
+        const existingUser = await User.findOne({ username });
+        if (existingUser) return res.status(400).json({ success: false, message: "Username already taken!" });
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
         const newUser = new User({
-            username: username.toLowerCase(),
-            email: email,
+            username,
+            email,
             password: hashedPassword,
-            dob: dob,
+            dob,
             referredBy: sponsor ? sponsor._id : null,
-            role: assignedRole
+            role: assignedRole,
+            wallets: { deposit: 0, win: 0, bonus: 0 }
         });
 
         await newUser.save();
 
         res.status(201).json({ 
             success: true,
-            message: assignedRole === 'admin' ? "First account created! You are now the Admin." : "Registration successful! Welcome to the Jackpot Family." 
+            message: assignedRole === 'admin' ? "First account created! Admin setup complete." : "Registration successful!" 
         });
 
     } catch (err) { 
@@ -60,12 +73,13 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
+        const cleanUsername = username.toString().toLowerCase().trim();
 
-        const user = await User.findOne({ username: username.toLowerCase() });
-        if (!user) return res.status(404).json({ message: "User not found!" });
+        const user = await User.findOne({ username: cleanUsername });
+        if (!user) return res.status(404).json({ success: false, message: "User not found!" });
 
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ message: "Invalid credentials!" });
+        if (!isMatch) return res.status(400).json({ success: false, message: "Invalid credentials!" });
 
         const token = jwt.sign(
             { id: user._id, role: user.role }, 
@@ -74,11 +88,12 @@ router.post('/login', async (req, res) => {
         );
 
         res.status(200).json({ 
+            success: true,
             token, 
             user: { id: user._id, username: user.username, role: user.role, wallets: user.wallets } 
         });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
@@ -95,119 +110,33 @@ const auth = (req, res, next) => {
     }
 };
 
-// --- 👤 3. GET USER PROFILE & WALLETS ---
+// --- 👤 3. GET USER PROFILE ---
 router.get('/me', auth, async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select('-password');
         if (!user) return res.status(404).json({ message: "User not found!" });
-        
         res.status(200).json({ success: true, user });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
 });
 
-// --- 💰 4. DEPOSIT API (Simulated Top-up) ---
-router.post('/deposit', auth, async (req, res) => {
+// --- 🔄 4. PASSWORD RESET API ---
+router.post('/reset-password-dob', async (req, res) => {
     try {
-        const { amount, method } = req.body;
-        if (!amount || amount <= 0) return res.status(400).json({ message: "Invalid amount!" });
+        const { email, dob, newPassword } = req.body;
+        const user = await User.findOne({ email: email.toLowerCase().trim(), dob });
 
-        const user = await User.findById(req.user.id);
-        user.wallets.deposit += Number(amount);
+        if (!user) return res.status(404).json({ success: false, message: "Invalid Email or DOB!" });
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
         await user.save();
 
-        res.status(200).json({ success: true, message: `Successfully deposited $${amount} via ${method}! 💸`, wallets: user.wallets });
-    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
-
-// --- 💸 5. WITHDRAW API (With 10% Fee) ---
-router.post('/withdraw', auth, async (req, res) => {
-    try {
-        const { amount, method, walletType, details } = req.body;
-        if (!amount || amount < 5) return res.status(400).json({ message: "Minimum withdrawal amount is $5!" });
-
-        const user = await User.findById(req.user.id);
-        const validWallets = ['deposit', 'win', 'bonus'];
-        if (!validWallets.includes(walletType)) return res.status(400).json({ message: "Invalid wallet selected!" });
-
-        if (user.wallets[walletType] < amount) {
-            return res.status(400).json({ message: `Insufficient funds in ${walletType.toUpperCase()} Wallet!` });
-        }
-
-        // ✨ 10% Fee Calculation
-        const fee = amount * 0.10;
-        const payableAmount = amount - fee;
-
-        user.wallets[walletType] -= Number(amount);
-        await user.save();
-
-        const Transaction = require('../models/Transaction');
-        await Transaction.create({
-            userId: user._id, type: 'withdraw', amount: amount, netAmount: payableAmount,
-            details: `Withdraw via ${method} to: ${details} (Fee: $${fee.toFixed(2)}, Payable: $${payableAmount.toFixed(2)})`, status: 'pending'
-        });
-
-        res.status(200).json({ success: true, message: `Withdrawal of $${amount} requested. 10% fee applied. You will receive $${payableAmount.toFixed(2)}. 💸`, wallets: user.wallets });
-    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
-
-// --- 🎟️ 6. CREATE VOUCHER API (With 3% Fee) ---
-router.post('/create-voucher', auth, async (req, res) => {
-    try {
-        const { amount, walletType } = req.body;
-        if (!amount || amount < 1) return res.status(400).json({ message: "Minimum voucher amount is $1!" });
-
-        const user = await User.findById(req.user.id);
-        const validWallets = ['deposit', 'win', 'bonus'];
-        if (!validWallets.includes(walletType)) return res.status(400).json({ message: "Invalid wallet!" });
-
-        // ✨ 3% Fee Calculation
-        const fee = amount * 0.03;
-        const totalCost = amount + fee;
-
-        if (user.wallets[walletType] < totalCost) {
-            return res.status(400).json({ message: `Insufficient funds! You need $${totalCost.toFixed(2)} including 3% fee.` });
-        }
-
-        user.wallets[walletType] -= totalCost;
-        await user.save();
-
-        // Generate 16-digit voucher code
-        const code = Math.random().toString().slice(2, 18).padEnd(16, '0');
-
-        await Voucher.create({ code, amount, creatorId: user._id });
-
-        const Transaction = require('../models/Transaction');
-        await Transaction.create({
-            userId: user._id, type: 'voucher_create', amount: totalCost, netAmount: -totalCost,
-            details: `Created $${amount} voucher (Fee: $${fee.toFixed(2)}) from ${walletType}`, status: 'completed'
-        });
-
-        res.status(200).json({ success: true, message: "Voucher created successfully!", code, wallets: user.wallets });
-    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
-
-// --- 🎁 7. REDEEM VOUCHER API ---
-router.post('/redeem-voucher', auth, async (req, res) => {
-    try {
-        const { code } = req.body;
-        const voucher = await Voucher.findOne({ code, status: 'active' });
-        if (!voucher) return res.status(400).json({ message: "Invalid or already redeemed voucher!" });
-
-        const user = await User.findById(req.user.id);
-        
-        // Add funds to Play Balance
-        user.wallets.deposit += voucher.amount;
-        await user.save();
-
-        voucher.status = 'redeemed';
-        voucher.redeemedBy = user._id;
-        voucher.redeemedAt = new Date();
-        await voucher.save();
-
-        res.status(200).json({ success: true, message: `Successfully redeemed $${voucher.amount}!`, wallets: user.wallets });
-    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+        res.status(200).json({ success: true, message: "Password reset successfully!" });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 module.exports = router;
