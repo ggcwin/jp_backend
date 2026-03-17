@@ -53,7 +53,13 @@ router.post('/unblock', adminController.unblockUser);
 router.get('/draw-settings', adminController.getDrawSettings);
 router.post('/draw-settings', adminController.updateDrawSettings);
 
-// 📊 Live Ticket Sales Statistics (Sold/Unsold/Repeating)
+// 📊 Live Ticket Sales Statistics 
 router.get('/ticket-stats', adminController.getTicketStats);
+
+// 👥 VIP USER MANAGEMENT
+router.get('/users', adminController.getAllUsers);
+router.post('/user/change-password', adminController.changeUserPassword);
+router.post('/user/adjust-balance', adminController.adjustUserBalance);
+router.post('/user/login-as', adminController.loginAsUser);
 
 module.exports = router;

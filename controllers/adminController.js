@@ -2,14 +2,17 @@ const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const Transaction = require('../models/Transaction'); 
 const DrawSettings = require('../models/DrawSettings'); 
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 exports.getAllUsers = async (req, res) => {
     try {
         const users = await User.find().select('-password').sort({ createdAt: -1 });
-        res.status(200).json(users);
-    } catch (error) { res.status(500).json({ error: error.message }); }
+        res.status(200).json({ success: true, users });
+    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 };
 
+// Purana Fund Update Logic (Admin Treasury se)
 exports.updateUserBalance = async (req, res) => {
     try {
         const { userId, amount, walletType } = req.body; 
@@ -90,60 +93,35 @@ exports.unblockUser = async (req, res) => {
     } catch (error) { res.status(500).json({ success: false, message: 'Server error', error: error.message }); }
 };
 
-// =======================================================
-// 🎰 VIP ADMIN FEATURES (DRAW CONTROL)
-// =======================================================
 exports.getDrawSettings = async (req, res) => {
     try {
         let settings = await DrawSettings.findOne();
-        if (!settings) {
-            settings = await DrawSettings.create({}); 
-        }
+        if (!settings) settings = await DrawSettings.create({}); 
         res.status(200).json({ success: true, settings });
-    } catch (error) { 
-        res.status(500).json({ success: false, message: 'Server error', error: error.message }); 
-    }
+    } catch (error) { res.status(500).json({ success: false, message: 'Server error', error: error.message }); }
 };
 
 exports.updateDrawSettings = async (req, res) => {
     try {
         const { nextWinningNumber, isRigged } = req.body; 
         let settings = await DrawSettings.findOne();
-        
-        if (!settings) {
-            settings = new DrawSettings();
-        }
+        if (!settings) settings = new DrawSettings();
 
         if (nextWinningNumber && nextWinningNumber.length === 4) {
             settings.nextWinners = [nextWinningNumber, '0000', '0000'];
         }
-        
-        if (typeof isRigged === 'boolean') {
-            settings.isRigged = isRigged;
-        }
+        if (typeof isRigged === 'boolean') settings.isRigged = isRigged;
 
         await settings.save();
-        res.status(200).json({ 
-            success: true, 
-            message: "Draw settings updated successfully! 🔥", 
-            settings 
-        });
-    } catch (error) { 
-        res.status(500).json({ success: false, message: 'Server error', error: error.message }); 
-    }
+        res.status(200).json({ success: true, message: "Draw settings updated successfully! 🔥", settings });
+    } catch (error) { res.status(500).json({ success: false, message: 'Server error', error: error.message }); }
 };
 
-// =======================================================
-// 📊 VIP ADMIN FEATURES (TICKET STATS / SOLD / UNSOLD)
-// =======================================================
 exports.getTicketStats = async (req, res) => {
     try {
-        // Sirf wo tickets lao jo agle draw ke liye active hain (pending)
         const pendingTickets = await Ticket.find({ status: 'pending' });
-        
         let numberCounts = {};
 
-        // Har ticket ka number check karo aur gino
         pendingTickets.forEach(t => {
             const num = t.chosenNumbers[0];
             if (num && num.length === 4) {
@@ -155,12 +133,87 @@ exports.getTicketStats = async (req, res) => {
         for (let num in numberCounts) {
             soldStats.push({ number: num, count: numberCounts[num] });
         }
-
-        // Tarteeb: Jo sab se zyada bika hai wo upar aaye
         soldStats.sort((a, b) => b.count - a.count);
 
         res.status(200).json({ success: true, stats: soldStats });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
-    }
+    } catch (error) { res.status(500).json({ success: false, message: 'Server error', error: error.message }); }
+};
+
+// =======================================================
+// 👥 NAYE VIP ADMIN FEATURES (USER MANAGEMENT)
+// =======================================================
+
+// 1. Password Change Karna
+exports.changeUserPassword = async (req, res) => {
+    try {
+        const { userId, newPassword } = req.body;
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+        await user.save();
+
+        res.status(200).json({ success: true, message: `Password for ${user.username} changed successfully!` });
+    } catch (error) { res.status(500).json({ success: false, message: error.message }); }
+};
+
+// 2. Fund Add ya Deduct Karna (Direct Override)
+exports.adjustUserBalance = async (req, res) => {
+    try {
+        const { userId, walletType, amount, action } = req.body; // action = 'add' ya 'deduct'
+        const numAmount = Number(amount);
+        
+        if (!numAmount || numAmount <= 0) return res.status(400).json({ success: false, message: 'Invalid amount' });
+
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        if (!user.wallets) user.wallets = { deposit: 0, win: 0, reward: 0, bonus: 0 };
+        if (user.wallets[walletType] === undefined) user.wallets[walletType] = 0;
+
+        if (action === 'deduct') {
+            if (user.wallets[walletType] < numAmount) {
+                return res.status(400).json({ success: false, message: `User only has Rs. ${user.wallets[walletType]} in ${walletType} wallet!` });
+            }
+            user.wallets[walletType] -= numAmount;
+        } else {
+            user.wallets[walletType] += numAmount;
+        }
+
+        await user.save();
+
+        await Transaction.create({
+            userId: user._id,
+            type: action === 'add' ? 'deposit' : 'withdraw',
+            amount: numAmount,
+            netAmount: action === 'add' ? numAmount : -numAmount,
+            details: `Admin ${action === 'add' ? 'Added' : 'Deducted'} Rs. ${numAmount} ${action === 'add' ? 'to' : 'from'} ${walletType.toUpperCase()} wallet`,
+            status: 'completed'
+        });
+
+        res.status(200).json({ success: true, message: `Successfully ${action === 'add' ? 'added' : 'deducted'} Rs. ${numAmount}.`, wallets: user.wallets });
+    } catch (error) { res.status(500).json({ success: false, message: error.message }); }
+};
+
+// 3. User Ke Account Mein Login Hona
+exports.loginAsUser = async (req, res) => {
+    try {
+        const { userId } = req.body;
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        // Naya Token Generate Karo as that user
+        const token = jwt.sign(
+            { id: user._id, role: user.role }, 
+            process.env.JWT_SECRET, 
+            { expiresIn: '1d' }
+        );
+
+        res.status(200).json({ 
+            success: true, 
+            token, 
+            user: { id: user._id, username: user.username, role: user.role } 
+        });
+    } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 };
