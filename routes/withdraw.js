@@ -3,15 +3,15 @@ const User = require('../models/User');
 const Withdraw = require('../models/Withdraw');
 const Transaction = require('../models/Transaction');
 
-// --- 1. USER: Nayi Withdrawal Request Bhejna ($1 Min + 15% Fee) ---
+// --- 1. USER: Nayi Withdrawal Request Bhejna (Rs. 500 Min + 15% Fee) ---
 router.post('/request', async (req, res) => {
     try {
         const { userId, amount, method, accountDetails, walletType } = req.body;
 
-        // A. Decimal khatam karna aur Minimum Check ($1)
+        // A. Decimal khatam karna aur Minimum Check (Rs. 500)
         const cleanAmount = Math.floor(Number(amount));
-        if (cleanAmount < 1) {
-            return res.status(400).json({ message: "Minimum withdrawal is $1.00 (No Decimals)" });
+        if (cleanAmount < 500) {
+            return res.status(400).json({ message: "Minimum withdrawal is Rs. 500 (No Decimals)" });
         }
 
         const user = await User.findById(userId);
@@ -32,26 +32,15 @@ router.post('/request', async (req, res) => {
 
         // E. Withdrawal Record Save karna
         const newRequest = new Withdraw({
-            userId,
-            amount: cleanAmount,
-            fee: fee,
-            finalAmount: finalAmountToUser,
-            method,
-            accountDetails,
-            walletType,
-            status: 'Pending'
+            userId, amount: cleanAmount, fee: fee, finalAmount: finalAmountToUser,
+            method, accountDetails, walletType, status: 'Pending'
         });
         await newRequest.save();
 
-        // F. Global History Log (Transaction Page ke liye)
+        // F. Global History Log
         await Transaction.create({
-            userId,
-            type: 'withdraw',
-            amount: cleanAmount,
-            fee: fee,
-            netAmount: finalAmountToUser,
-            status: 'pending',
-            details: `Withdrawal via ${method} from ${walletType} wallet`
+            userId, type: 'withdraw', amount: cleanAmount, fee: fee, netAmount: finalAmountToUser,
+            status: 'pending', details: `Withdrawal via ${method} from ${walletType} wallet`
         });
 
         res.status(201).json({
@@ -83,10 +72,10 @@ router.get('/all', async (req, res) => {
     }
 });
 
-// --- 4. ADMIN: Request Approve ya Reject karna (Refund Logic Shamil) ---
+// --- 4. ADMIN: Request Approve ya Reject karna ---
 router.post('/action', async (req, res) => {
     try {
-        const { requestId, action } = req.body; // action: 'Approved' or 'Rejected'
+        const { requestId, action } = req.body; 
 
         const request = await Withdraw.findById(requestId);
         if (!request) return res.status(404).json({ message: "Request not found!" });
@@ -98,19 +87,16 @@ router.post('/action', async (req, res) => {
         if (action === 'Rejected') {
             const user = await User.findById(request.userId);
             if (user) {
-                // Paise wapas usi wallet mein refund karna
                 const walletToRefund = request.walletType || 'win';
                 user.wallets[walletToRefund] += request.amount;
                 await user.save();
 
-                // History update (pending -> rejected)
                 await Transaction.findOneAndUpdate(
                     { userId: user._id, type: 'withdraw', amount: request.amount, status: 'pending' },
                     { status: 'rejected' }
                 );
             }
         } else if (action === 'Approved') {
-            // History update (pending -> completed)
             await Transaction.findOneAndUpdate(
                 { userId: request.userId, type: 'withdraw', amount: request.amount, status: 'pending' },
                 { status: 'completed' }

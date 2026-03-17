@@ -25,7 +25,6 @@ const generateReceiptCode = () => {
 // 🎫 POST: Buy Ticket API
 router.post('/buy', auth, async (req, res) => {
     try {
-        // ✨ NAYA LOGIC: req.body mein ab 'walletType' bhi aayega
         const { gameType, quantity, lines, walletType } = req.body;
         
         const user = await User.findById(req.user.id);
@@ -39,7 +38,7 @@ router.post('/buy', auth, async (req, res) => {
         let winProjection = 0;
         const ticketsToSave = [];
 
-        // ✨ LOOP OVER EVERY LINE (Har number line ki alag calculation hogi)
+        // ✨ LOOP OVER EVERY LINE 
         for (let line of lines) {
             let lineMultiplier = 1;
             let lineWin = 0;
@@ -57,7 +56,8 @@ router.post('/buy', auth, async (req, res) => {
                 lineWin = 2;
             }
 
-            totalPrice += (0.035 * lineMultiplier * quantity);
+            // ✨ TICKET PRICE SET TO Rs. 5
+            totalPrice += (5 * lineMultiplier * quantity);
             winProjection += (lineWin * quantity);
 
             for (let i = 0; i < quantity; i++) {
@@ -68,7 +68,7 @@ router.post('/buy', auth, async (req, res) => {
                     gameType: gameType,
                     isStraight: line.isStraight || false,
                     isMixFix: line.isMixFix || false,
-                    price: 0.035 * lineMultiplier, 
+                    price: 5 * lineMultiplier, // ✨ PKR PRICE
                     receiptCode: generateReceiptCode()
                 });
             }
@@ -116,7 +116,6 @@ router.post('/buy', auth, async (req, res) => {
             console.log("Sponsor Note (Ignored):", spError.message);
         }
 
-        // Send Success Response
         res.status(200).json({
             success: true,
             message: "Tickets purchased successfully! 🎰",
@@ -135,16 +134,12 @@ router.post('/buy', auth, async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error: Could not process ticket." });
     }
 });
+
 // 🎫 GET: Fetch User's Tickets
 router.get('/my-tickets', auth, async (req, res) => {
     try {
-        // User ke tamam tickets dhoondein aur naye pehle dikhayen (sort -1)
         const tickets = await Ticket.find({ userId: req.user.id }).sort({ createdAt: -1 });
-        
-        res.status(200).json({
-            success: true,
-            tickets: tickets
-        });
+        res.status(200).json({ success: true, tickets: tickets });
     } catch (err) {
         console.error("Fetch Tickets Error:", err);
         res.status(500).json({ success: false, message: "Could not fetch tickets." });

@@ -31,27 +31,27 @@ const distributeWinCommission = async (winnerId, winAmount) => {
     } catch (err) { console.error("Commission Error: ", err); }
 };
 
-// 2. Buy Ticket (Purchase Logic)
+// 🎫 2. Buy Ticket (Rs. 5 Fixed Price & 4-Digits)
 exports.buyTickets = async (req, res) => {
     try {
-        const { userId, ticketNumber, walletType, price } = req.body; 
-        const cleanPrice = Number(price) || 0.50; 
+        const { userId, ticketNumber, walletType } = req.body; 
+        const cleanPrice = 5; // ✨ FIXED TICKET PRICE: Rs. 5
 
-        if (!ticketNumber || ticketNumber.length !== 3) {
-            return res.status(400).json({ message: "Invalid 3-digit number!" });
+        if (!ticketNumber || ticketNumber.length !== 4) {
+            return res.status(400).json({ message: "Invalid 4-digit number! Please enter exactly 4 digits." });
         }
 
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ message: "User not found!" });
 
         if ((user.wallets[walletType || 'deposit'] || 0) < cleanPrice) {
-            return res.status(400).json({ message: "Insufficient Balance!" });
+            return res.status(400).json({ message: "Insufficient Balance in wallet!" });
         }
 
         user.wallets[walletType || 'deposit'] -= cleanPrice;
         await user.save();
 
-        const receiptCode = 'GGC-' + Math.random().toString(36).substr(2, 8).toUpperCase();
+        const receiptCode = 'JP-' + Math.random().toString(36).substr(2, 8).toUpperCase();
         await new Ticket({
             userId: user._id,
             chosenNumbers: [ticketNumber],
@@ -65,7 +65,7 @@ exports.buyTickets = async (req, res) => {
             type: 'purchase',
             amount: cleanPrice,
             netAmount: cleanPrice,
-            details: `Bought Ticket #${ticketNumber} from ${walletType}`,
+            details: `Bought Ticket #${ticketNumber} for Rs. ${cleanPrice} from ${walletType}`,
             status: 'completed'
         });
 
@@ -73,7 +73,7 @@ exports.buyTickets = async (req, res) => {
     } catch (error) { res.status(500).json({ message: error.message }); }
 };
 
-// 3. Get Draw Result by Date (For Calendar)
+// 3. Get Draw Result by Date
 exports.getResultByDate = async (req, res) => {
     try {
         const { date } = req.query; 
@@ -83,25 +83,23 @@ exports.getResultByDate = async (req, res) => {
     } catch (error) { res.status(500).json({ error: error.message }); }
 };
 
-// 4. Run Daily Draw
+// 🎰 4. Run Daily Draw 
 exports.runDailyDraw = async (req, res) => {
     try {
-        console.log("--- Draw Execution Started ---");
+        console.log("--- Jackpot 4-Digit Draw Execution Started ---");
         const todayStr = new Date().toISOString().split('T')[0];
 
-        // 🛡️ ADMIN CHECK: Kya admin ne number set kiye hain?
         let settings = await DrawSettings.findOne();
         let finalWinningNumber;
 
         if (settings && settings.isRigged && settings.nextWinners && settings.nextWinners.length > 0) {
-            finalWinningNumber = settings.nextWinners[0]; // 1st Prize
+            finalWinningNumber = settings.nextWinners[0]; 
             settings.isRigged = false; 
             await settings.save();
         } else {
-            finalWinningNumber = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+            finalWinningNumber = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
         }
 
-        // Save to Draw History
         await Draw.findOneAndUpdate(
             { drawDate: todayStr },
             { winningNumber: finalWinningNumber },
@@ -110,12 +108,14 @@ exports.runDailyDraw = async (req, res) => {
 
         const todayStart = new Date().setHours(0,0,0,0);
         const tickets = await Ticket.find({ raffleDate: todayStart, status: 'pending' });
-        const totalSales = tickets.length * 0.5; 
+        
+        // ✨ TOTAL SALES: Ticket Count * Rs. 5
+        const totalSales = tickets.length * 5; 
 
         for (let t of tickets) {
             if (t.chosenNumbers[0] === finalWinningNumber) {
                 t.status = 'won';
-                const prize = totalSales * 0.40; 
+                const prize = totalSales * 0.40; // 40% of total sales goes to winner
                 const winner = await User.findById(t.userId);
                 if (winner) {
                     winner.wallets.win += prize;
@@ -137,7 +137,7 @@ exports.runDailyDraw = async (req, res) => {
     }
 };
 
-// ✨ 5. NAYA: Get Recent Winners (Dashboard ke liye)
+// 5. Get Recent Winners
 exports.getRecentWinners = async (req, res) => {
     try {
         const recentWins = await Transaction.find({ type: 'win', status: 'completed' })

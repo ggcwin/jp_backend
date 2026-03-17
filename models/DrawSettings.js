@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const drawSettingsSchema = new mongoose.Schema({
     nextWinners: { 
         type: [String], 
-        default: ['000', '000', '000'] // 1st, 2nd, 3rd Prize
+        // ✨ FIX: 3-digits ki jagah ab 4-digits ('0000') kar diya gaya hai
+        default: ['0000', '0000', '0000'] // 1st, 2nd, 3rd Prize
     },
     isRigged: { 
         type: Boolean, 

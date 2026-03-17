@@ -6,12 +6,13 @@ const usersSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     fullName: String,
     phone: String,
-    dob: { type: String, required: true }, // ✨ NAYA: Date of Birth add kar di
+    dob: { type: String, required: true }, 
     role: { type: String, default: 'user' }, 
     wallets: {
         deposit: { type: Number, default: 0 },
         win: { type: Number, default: 0 },
-        reward: { type: Number, default: 0.05 } 
+        // ✨ FIX: 0.05 (Dollar) se change kar ke 0 kar diya gaya hai
+        reward: { type: Number, default: 0 } 
     },
     totalEarning: { type: Number, default: 0 },
     ipAddress: { type: String, default: null },
