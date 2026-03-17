@@ -24,8 +24,11 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ message: "You cannot send money to yourself!" });
         }
 
+        // ✨ FIX: Error message mein Rs. 
         if (sender.wallets[walletType] < totalDeduction) {
-            return res.status(400).json({ message: "Insufficient Balance!" });
+            return res.status(400).json({ 
+                message: `Insufficient balance! Total cost: Rs. ${totalDeduction.toFixed(2)} (including 3% fee).` 
+            });
         }
 
         sender.wallets[walletType] -= totalDeduction;
@@ -34,16 +37,22 @@ router.post('/', async (req, res) => {
         await sender.save();
         await receiver.save();
 
-        // ✨ SENDER HISTORY (Rs.)
+        // ✨ FIX: Sender History mein Rs.
         await Transaction.create({
-            userId: sender._id, type: 'transfer', amount: totalDeduction, netAmount: totalDeduction,
+            userId: sender._id,
+            type: 'transfer',
+            amount: totalDeduction, 
+            netAmount: totalDeduction,
             details: `💸 Sent Rs. ${transferAmount.toFixed(2)} to ${receiver.username} (Fee: Rs. ${fee.toFixed(2)})`,
             status: 'completed'
         });
 
-        // ✨ RECEIVER HISTORY (Rs.)
+        // ✨ FIX: Receiver History mein Rs.
         await Transaction.create({
-            userId: receiver._id, type: 'deposit', amount: transferAmount, netAmount: transferAmount,
+            userId: receiver._id,
+            type: 'deposit',
+            amount: transferAmount,
+            netAmount: transferAmount,
             details: `📥 Received Rs. ${transferAmount.toFixed(2)} from ${sender.username}`,
             status: 'completed'
         });
@@ -54,10 +63,12 @@ router.post('/', async (req, res) => {
             await admin.save();
         }
 
-        res.status(200).json({ message: "Transfer Successful!", newBalance: sender.wallets[walletType] });
+        res.status(200).json({ 
+            message: "Transfer Successful!", 
+            newBalance: sender.wallets[walletType] 
+        });
 
     } catch (err) {
-        console.error("Transfer Error:", err);
         res.status(500).json({ message: "Transfer failed due to server error." });
     }
 });

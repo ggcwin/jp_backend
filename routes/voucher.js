@@ -4,7 +4,6 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const crypto = require('crypto');
 
-// 👑 ADMIN: Load Vouchers with Username
 router.get('/', async (req, res) => {
     try {
         const vouchers = await Voucher.find()
@@ -16,7 +15,6 @@ router.get('/', async (req, res) => {
     }
 });
 
-// 👑 ADMIN: Generate New Vouchers
 router.post('/generate', async (req, res) => {
     try {
         const { amount, count } = req.body;
@@ -35,7 +33,6 @@ router.post('/generate', async (req, res) => {
     }
 });
 
-// 👤 USER: Redeem Voucher
 router.post('/redeem', async (req, res) => {
     try {
         const { userId, code } = req.body;
@@ -65,13 +62,15 @@ router.post('/redeem', async (req, res) => {
         user.wallets.deposit += voucher.amount;
         await user.save();
 
+        // ✨ FIX: History log mein Rs. lagaya
         await Transaction.create({
             userId: user._id, type: 'deposit', amount: voucher.amount, netAmount: voucher.amount,
-            details: `🎟️ Redeemed Promo Code: ${cleanCode}`, status: 'completed'
+            details: `🎟️ Redeemed Promo Code: ${cleanCode} for Rs. ${voucher.amount}`, status: 'completed'
         });
 
+        // ✨ FIX: Success message mein Rs.
         res.status(200).json({ 
-            message: `Success! Rs. ${voucher.amount} added to your account.`, // ✨ PKR Update
+            message: `Success! Rs. ${voucher.amount} added to your account.`,
             amount: voucher.amount,
             walletType: 'deposit',
             newBalance: user.wallets.deposit

@@ -1,7 +1,7 @@
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const Transaction = require('../models/Transaction'); 
-const DrawSettings = require('../models/DrawSettings'); // ✨ NAYA: Draw Settings Model
+const DrawSettings = require('../models/DrawSettings'); 
 
 exports.getAllUsers = async (req, res) => {
     try {
@@ -91,14 +91,13 @@ exports.unblockUser = async (req, res) => {
 };
 
 // =======================================================
-// 🎰 NAYE VIP ADMIN FEATURES (DRAW CONTROL)
+// 🎰 VIP ADMIN FEATURES (DRAW CONTROL)
 // =======================================================
-
 exports.getDrawSettings = async (req, res) => {
     try {
         let settings = await DrawSettings.findOne();
         if (!settings) {
-            settings = await DrawSettings.create({}); // Agar database mein nahi hai toh bana do
+            settings = await DrawSettings.create({}); 
         }
         res.status(200).json({ success: true, settings });
     } catch (error) { 
@@ -115,7 +114,6 @@ exports.updateDrawSettings = async (req, res) => {
             settings = new DrawSettings();
         }
 
-        // 4-Digit Number Validation
         if (nextWinningNumber && nextWinningNumber.length === 4) {
             settings.nextWinners = [nextWinningNumber, '0000', '0000'];
         }
@@ -132,5 +130,37 @@ exports.updateDrawSettings = async (req, res) => {
         });
     } catch (error) { 
         res.status(500).json({ success: false, message: 'Server error', error: error.message }); 
+    }
+};
+
+// =======================================================
+// 📊 VIP ADMIN FEATURES (TICKET STATS / SOLD / UNSOLD)
+// =======================================================
+exports.getTicketStats = async (req, res) => {
+    try {
+        // Sirf wo tickets lao jo agle draw ke liye active hain (pending)
+        const pendingTickets = await Ticket.find({ status: 'pending' });
+        
+        let numberCounts = {};
+
+        // Har ticket ka number check karo aur gino
+        pendingTickets.forEach(t => {
+            const num = t.chosenNumbers[0];
+            if (num && num.length === 4) {
+                numberCounts[num] = (numberCounts[num] || 0) + 1;
+            }
+        });
+
+        let soldStats = [];
+        for (let num in numberCounts) {
+            soldStats.push({ number: num, count: numberCounts[num] });
+        }
+
+        // Tarteeb: Jo sab se zyada bika hai wo upar aaye
+        soldStats.sort((a, b) => b.count - a.count);
+
+        res.status(200).json({ success: true, stats: soldStats });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };

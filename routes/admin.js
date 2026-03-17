@@ -7,17 +7,14 @@ const Ticket = require('../models/Ticket');
 const Withdraw = require('../models/Withdraw');
 const Promotion = require('../models/Promotion');
 
-// Admin Controller import kiya
 const adminController = require('../controllers/adminController');
 
-// --- PROMOTION UPLOAD LOGIC ---
 const storage = multer.diskStorage({
     destination: './uploads/promotions/',
     filename: (req, file, cb) => cb(null, 'promo-' + Date.now() + path.extname(file.originalname))
 });
 const upload = multer({ storage });
 
-// --- EXISTING ROUTES (Stats & Promotion) ---
 router.get('/stats', async (req, res) => {
     try {
         const totalUsers = await User.countDocuments();
@@ -48,16 +45,15 @@ router.post('/user/toggle-block', async (req, res) => {
     } catch (err) { res.status(500).json({ message: "Action failed" }); }
 });
 
-// =======================================================
-// 🔐 VIP ADMIN ROUTES (Locked Accounts System)
-// =======================================================
+// 🔒 Locked Accounts System
 router.get('/locked-users', adminController.getLockedUsers);
 router.post('/unblock', adminController.unblockUser);
 
-// =======================================================
-// 🎰 VIP ADMIN ROUTES (Draw Settings / Rigged Control)
-// =======================================================
+// 🎰 Draw Settings / Rigged Control
 router.get('/draw-settings', adminController.getDrawSettings);
 router.post('/draw-settings', adminController.updateDrawSettings);
+
+// 📊 Live Ticket Sales Statistics (Sold/Unsold/Repeating)
+router.get('/ticket-stats', adminController.getTicketStats);
 
 module.exports = router;

@@ -8,8 +8,8 @@ router.post('/request', async (req, res) => {
     try {
         const { userId, amount, method, accountDetails, walletType } = req.body;
 
-        // A. Decimal khatam karna aur Minimum Check (Rs. 500)
         const cleanAmount = Math.floor(Number(amount));
+        // ✨ FIX: Message aur Limit Rs. 500 kar di gayi
         if (cleanAmount < 500) {
             return res.status(400).json({ message: "Minimum withdrawal is Rs. 500 (No Decimals)" });
         }
@@ -17,30 +17,26 @@ router.post('/request', async (req, res) => {
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ message: "User not found!" });
 
-        // B. Wallet Balance Check
         if (!user.wallets[walletType] || user.wallets[walletType] < cleanAmount) {
             return res.status(400).json({ message: `Insufficient balance in ${walletType} wallet!` });
         }
 
-        // C. 15% Policy aur Calculations
         const fee = cleanAmount * 0.15;
         const finalAmountToUser = cleanAmount - fee;
 
-        // D. Transaction Atomic (Wallets se deduct karna)
         user.wallets[walletType] -= cleanAmount;
         await user.save();
 
-        // E. Withdrawal Record Save karna
         const newRequest = new Withdraw({
             userId, amount: cleanAmount, fee: fee, finalAmount: finalAmountToUser,
             method, accountDetails, walletType, status: 'Pending'
         });
         await newRequest.save();
 
-        // F. Global History Log
+        // ✨ FIX: Transaction detail mein Rs.
         await Transaction.create({
             userId, type: 'withdraw', amount: cleanAmount, fee: fee, netAmount: finalAmountToUser,
-            status: 'pending', details: `Withdrawal via ${method} from ${walletType} wallet`
+            status: 'pending', details: `Withdrawal of Rs. ${cleanAmount} via ${method} from ${walletType} wallet`
         });
 
         res.status(201).json({
@@ -52,7 +48,6 @@ router.post('/request', async (req, res) => {
     }
 });
 
-// --- 2. USER: Apni History Dekhna ---
 router.get('/history/:userId', async (req, res) => {
     try {
         const history = await Withdraw.find({ userId: req.params.userId }).sort({ createdAt: -1 });
@@ -62,7 +57,6 @@ router.get('/history/:userId', async (req, res) => {
     }
 });
 
-// --- 3. ADMIN: Sari Requests Dekhna (With Username) ---
 router.get('/all', async (req, res) => {
     try {
         const requests = await Withdraw.find().populate('userId', 'username email').sort({ createdAt: -1 });
@@ -72,7 +66,6 @@ router.get('/all', async (req, res) => {
     }
 });
 
-// --- 4. ADMIN: Request Approve ya Reject karna ---
 router.post('/action', async (req, res) => {
     try {
         const { requestId, action } = req.body; 

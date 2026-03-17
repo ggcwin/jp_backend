@@ -17,7 +17,6 @@ const auth = (req, res, next) => {
     }
 };
 
-// Unique Code Generator Helper
 const generateReceiptCode = () => {
     return 'RC-' + Math.random().toString(36).substr(2, 6).toUpperCase() + '-' + Date.now().toString().slice(-4);
 };
@@ -30,7 +29,6 @@ router.post('/buy', auth, async (req, res) => {
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ success: false, message: "User not found!" });
 
-        // ✨ WALLET SELECTION LOGIC
         const validWallets = ['deposit', 'win', 'bonus'];
         const selectedWallet = validWallets.includes(walletType) ? walletType : 'deposit';
 
@@ -38,7 +36,6 @@ router.post('/buy', auth, async (req, res) => {
         let winProjection = 0;
         const ticketsToSave = [];
 
-        // ✨ LOOP OVER EVERY LINE 
         for (let line of lines) {
             let lineMultiplier = 1;
             let lineWin = 0;
@@ -56,7 +53,6 @@ router.post('/buy', auth, async (req, res) => {
                 lineWin = 2;
             }
 
-            // ✨ TICKET PRICE SET TO Rs. 5
             totalPrice += (5 * lineMultiplier * quantity);
             winProjection += (lineWin * quantity);
 
@@ -68,13 +64,12 @@ router.post('/buy', auth, async (req, res) => {
                     gameType: gameType,
                     isStraight: line.isStraight || false,
                     isMixFix: line.isMixFix || false,
-                    price: 5 * lineMultiplier, // ✨ PKR PRICE
+                    price: 5 * lineMultiplier,
                     receiptCode: generateReceiptCode()
                 });
             }
         }
 
-        // ✨ SELECTED WALLET MEIN BALANCE CHECK
         if (user.wallets[selectedWallet] < totalPrice) {
             return res.status(400).json({ 
                 success: false, 
@@ -82,22 +77,20 @@ router.post('/buy', auth, async (req, res) => {
             });
         }
 
-        // ✨ SELECTED WALLET SE PAISE KATO
         user.wallets[selectedWallet] -= totalPrice;
         await user.save();
         await Ticket.insertMany(ticketsToSave);
 
-        // SAFE GUARD 1: Transaction Creation
         try {
             await Transaction.create({
                 userId: user._id, type: 'ticket_buy', amount: totalPrice, netAmount: -totalPrice,
-                details: `Bought ${quantity}x ${gameType} [${lines.length} Lines] via ${selectedWallet} wallet`, status: 'completed'
+                // ✨ FIX: History detail mein Rs.
+                details: `Bought ${quantity}x ${gameType} [${lines.length} Lines] for Rs. ${totalPrice} via ${selectedWallet} wallet`, status: 'completed'
             });
         } catch (txError) {
             console.log("Transaction Note (Ignored):", txError.message);
         }
 
-        // SAFE GUARD 2: Sponsor Fetching
         let sponsorName = "No Sponsor";
         let grandSponsorName = "No G.Sponsor";
         
@@ -135,7 +128,6 @@ router.post('/buy', auth, async (req, res) => {
     }
 });
 
-// 🎫 GET: Fetch User's Tickets
 router.get('/my-tickets', auth, async (req, res) => {
     try {
         const tickets = await Ticket.find({ userId: req.user.id }).sort({ createdAt: -1 });
@@ -145,4 +137,5 @@ router.get('/my-tickets', auth, async (req, res) => {
         res.status(500).json({ success: false, message: "Could not fetch tickets." });
     }
 });
+
 module.exports = router;
