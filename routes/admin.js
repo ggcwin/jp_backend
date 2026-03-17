@@ -45,15 +45,10 @@ router.post('/user/toggle-block', async (req, res) => {
     } catch (err) { res.status(500).json({ message: "Action failed" }); }
 });
 
-// 🔒 Locked Accounts System
 router.get('/locked-users', adminController.getLockedUsers);
 router.post('/unblock', adminController.unblockUser);
-
-// 🎰 Draw Settings / Rigged Control
 router.get('/draw-settings', adminController.getDrawSettings);
 router.post('/draw-settings', adminController.updateDrawSettings);
-
-// 📊 Live Ticket Sales Statistics 
 router.get('/ticket-stats', adminController.getTicketStats);
 
 // 👥 VIP USER MANAGEMENT
@@ -61,5 +56,8 @@ router.get('/users', adminController.getAllUsers);
 router.post('/user/change-password', adminController.changeUserPassword);
 router.post('/user/adjust-balance', adminController.adjustUserBalance);
 router.post('/user/login-as', adminController.loginAsUser);
+
+// ✨ NAYA LOGIC: Global Ledger API
+router.get('/ledger', adminController.getGlobalLedger);
 
 module.exports = router;

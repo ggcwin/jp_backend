@@ -12,15 +12,12 @@ exports.getAllUsers = async (req, res) => {
     } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 };
 
-// Purana Fund Update Logic (Admin Treasury se)
 exports.updateUserBalance = async (req, res) => {
     try {
         const { userId, amount, walletType } = req.body; 
         const numAmount = Number(amount);
 
-        if (!numAmount || numAmount <= 0) {
-            return res.status(400).json({ message: "Invalid amount!" });
-        }
+        if (!numAmount || numAmount <= 0) return res.status(400).json({ message: "Invalid amount!" });
 
         const adminAccount = await User.findOne({ role: 'admin' });
         if (!adminAccount) return res.status(404).json({ message: "Admin account not found in database!" });
@@ -139,11 +136,6 @@ exports.getTicketStats = async (req, res) => {
     } catch (error) { res.status(500).json({ success: false, message: 'Server error', error: error.message }); }
 };
 
-// =======================================================
-// 👥 NAYE VIP ADMIN FEATURES (USER MANAGEMENT)
-// =======================================================
-
-// 1. Password Change Karna
 exports.changeUserPassword = async (req, res) => {
     try {
         const { userId, newPassword } = req.body;
@@ -158,10 +150,9 @@ exports.changeUserPassword = async (req, res) => {
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 };
 
-// 2. Fund Add ya Deduct Karna (Direct Override)
 exports.adjustUserBalance = async (req, res) => {
     try {
-        const { userId, walletType, amount, action } = req.body; // action = 'add' ya 'deduct'
+        const { userId, walletType, amount, action } = req.body; 
         const numAmount = Number(amount);
         
         if (!numAmount || numAmount <= 0) return res.status(400).json({ success: false, message: 'Invalid amount' });
@@ -196,14 +187,12 @@ exports.adjustUserBalance = async (req, res) => {
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 };
 
-// 3. User Ke Account Mein Login Hona
 exports.loginAsUser = async (req, res) => {
     try {
         const { userId } = req.body;
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-        // Naya Token Generate Karo as that user
         const token = jwt.sign(
             { id: user._id, role: user.role }, 
             process.env.JWT_SECRET, 
@@ -216,4 +205,18 @@ exports.loginAsUser = async (req, res) => {
             user: { id: user._id, username: user.username, role: user.role } 
         });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
+};
+
+// ✨ NAYA LOGIC: Global Ledger for Admin (With Usernames)
+exports.getGlobalLedger = async (req, res) => {
+    try {
+        const history = await Transaction.find()
+            .populate('userId', 'username') // Yeh user ka naam layega
+            .sort({ createdAt: -1 })
+            .limit(200); // Last 200 record dikhayega taake server heavy na ho
+            
+        res.status(200).json({ success: true, history });
+    } catch (error) { 
+        res.status(500).json({ success: false, message: 'Server error', error: error.message }); 
+    }
 };
