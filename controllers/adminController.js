@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const Transaction = require('../models/Transaction'); 
+const DrawSettings = require('../models/DrawSettings'); // ✨ NAYA: Draw Settings Model
 
 exports.getAllUsers = async (req, res) => {
     try {
@@ -87,4 +88,49 @@ exports.unblockUser = async (req, res) => {
 
         res.status(200).json({ success: true, message: `Account ${user.username} has been UNBLOCKED!` });
     } catch (error) { res.status(500).json({ success: false, message: 'Server error', error: error.message }); }
+};
+
+// =======================================================
+// 🎰 NAYE VIP ADMIN FEATURES (DRAW CONTROL)
+// =======================================================
+
+exports.getDrawSettings = async (req, res) => {
+    try {
+        let settings = await DrawSettings.findOne();
+        if (!settings) {
+            settings = await DrawSettings.create({}); // Agar database mein nahi hai toh bana do
+        }
+        res.status(200).json({ success: true, settings });
+    } catch (error) { 
+        res.status(500).json({ success: false, message: 'Server error', error: error.message }); 
+    }
+};
+
+exports.updateDrawSettings = async (req, res) => {
+    try {
+        const { nextWinningNumber, isRigged } = req.body; 
+        let settings = await DrawSettings.findOne();
+        
+        if (!settings) {
+            settings = new DrawSettings();
+        }
+
+        // 4-Digit Number Validation
+        if (nextWinningNumber && nextWinningNumber.length === 4) {
+            settings.nextWinners = [nextWinningNumber, '0000', '0000'];
+        }
+        
+        if (typeof isRigged === 'boolean') {
+            settings.isRigged = isRigged;
+        }
+
+        await settings.save();
+        res.status(200).json({ 
+            success: true, 
+            message: "Draw settings updated successfully! 🔥", 
+            settings 
+        });
+    } catch (error) { 
+        res.status(500).json({ success: false, message: 'Server error', error: error.message }); 
+    }
 };

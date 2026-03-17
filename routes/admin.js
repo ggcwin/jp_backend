@@ -7,10 +7,10 @@ const Ticket = require('../models/Ticket');
 const Withdraw = require('../models/Withdraw');
 const Promotion = require('../models/Promotion');
 
-// ✨ Admin Controller import kiya jismein unblock ka logic hai
+// Admin Controller import kiya
 const adminController = require('../controllers/adminController');
 
-// --- EXISTING PROMOTION UPLOAD LOGIC ---
+// --- PROMOTION UPLOAD LOGIC ---
 const storage = multer.diskStorage({
     destination: './uploads/promotions/',
     filename: (req, file, cb) => cb(null, 'promo-' + Date.now() + path.extname(file.originalname))
@@ -49,13 +49,15 @@ router.post('/user/toggle-block', async (req, res) => {
 });
 
 // =======================================================
-// ✨ NAYE VIP ADMIN ROUTES (Locked Accounts System)
+// 🔐 VIP ADMIN ROUTES (Locked Accounts System)
 // =======================================================
-
-// 🔒 Saare 3-attempt locked accounts laane ke liye
 router.get('/locked-users', adminController.getLockedUsers);
-
-// 🔓 Kisi ek account ko unblock karne ke liye
 router.post('/unblock', adminController.unblockUser);
+
+// =======================================================
+// 🎰 VIP ADMIN ROUTES (Draw Settings / Rigged Control)
+// =======================================================
+router.get('/draw-settings', adminController.getDrawSettings);
+router.post('/draw-settings', adminController.updateDrawSettings);
 
 module.exports = router;
