@@ -12,7 +12,7 @@ const Transaction = require('./models/Transaction');
 const DrawSettings = require('./models/DrawSettings'); 
 const Draw = require('./models/Draw'); 
 
-// ✨ IMPORT ADMIN CONTROLLER (Jo humara main 4-digit draw logic chalayega)
+// ✨ IMPORT ADMIN CONTROLLER
 const adminController = require('./controllers/adminController');
 
 const app = express();
@@ -31,7 +31,6 @@ app.use('/api/ticket/buy', (req, res, next) => {
     const hours = pktTime.getHours();
     const minutes = pktTime.getMinutes();
 
-    // Raat 10:57 PM se 10:59 PM tak purchasing block!
     if (hours === 22 && minutes >= 57) {
         return res.status(403).json({ message: "⏳ Draw in progress! Ticket purchasing is disabled until 11:00 PM." });
     }
@@ -60,7 +59,6 @@ app.get('/api/draw/result-by-date', async (req, res) => {
         const result = await Draw.findOne({ drawDate: date });
         if (!result) return res.status(404).json({ message: "No draw results for this date." });
 
-        // ✨ FIX: Purane 2nd/3rd numbers hata diye. Ab sirf 1 hi 4-digit Winning Number aayega.
         res.status(200).json({
             winningNumber: result.winningNumber,
             status: result.status
@@ -72,11 +70,12 @@ app.get('/api/draw/result-by-date', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.status(200).send('GGC WIN Backend is awake and running! 🚀');
+    res.status(200).send('Jackpot Backend is awake and running! 🚀');
 });
 
-app.get('/ping', (req, res) => {
-    res.status(200).send('Pong! 🏓');
+// ✨ NAYA: Simple Ping Route
+app.get('/api/ping', (req, res) => {
+    res.status(200).send('Pong! 🏓 Server is awake!');
 });
 
 // --- 5. 💾 Database Connection ---
@@ -95,10 +94,9 @@ mongoose.connect(mongoURI)
 // 🎰 6. THE ULTIMATE DAILY DRAW CRON JOB (11:00 PM PKT)
 // ==========================================
 cron.schedule('0 23 * * *', async () => {
-    console.log('🎰 Starting GGC WIN Daily Draw at 11:00 PM PKT...');
+    console.log('🎰 Starting Jackpot Daily Draw at 11:00 PM PKT...');
     
     try {
-        // ✨ FIX: Apna banaya hua Master Draw Engine call kar liya
         await adminController.runSlotMachineDraw();
         console.log('✅ Daily Draw execution finished.');
     } catch (error) {
@@ -119,17 +117,18 @@ app.use((err, req, res, next) => {
 });
 
 // --- 8. 🚀 Server Start ---
-// ✨ FIX: Port update kar ke 3000 kar diya hai
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 GGCWIN Backend is running on port ${PORT}`);
+  console.log(`🚀 Jackpot Backend is running on port ${PORT}`);
 });
 
-// --- 9. ⏰ SERVER WAKE-UP (ANTI-SLEEP PING) ---
+// --- 9. ⏰ SERVER WAKE-UP (ANTI-SLEEP PING - EVERY 7 MINS) ---
 setInterval(() => {
-    https.get("https://ggcwin-backend.onrender.com", (res) => {
-        console.log(`⏰ [WAKE-UP PING] Status: ${res.statusCode}`);
+    // ✨ REPLACE "jackpot-zz3c" WITH YOUR ACTUAL RENDER LINK IF IT CHANGES
+    const backendUrl = 'https://jackpot-zz3c.onrender.com/api/ping'; 
+    https.get(backendUrl, (res) => {
+        console.log(`⏰ [WAKE-UP PING] Server Pinged: Status ${res.statusCode} 🚀`);
     }).on('error', (err) => {
         console.error('⏰ [WAKE-UP PING] Error:', err.message);
     });
-}, 600000);
+}, 7 * 60 * 1000); // 7 Minutes
