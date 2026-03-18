@@ -60,4 +60,7 @@ router.post('/user/login-as', adminController.loginAsUser);
 // ✨ NAYA LOGIC: Global Ledger API
 router.get('/ledger', adminController.getGlobalLedger);
 
+// ✨ NAYA LOGIC: Risk Analysis API
+router.post('/risk-analysis', adminController.getRiskAnalysis);
+
 module.exports = router;
