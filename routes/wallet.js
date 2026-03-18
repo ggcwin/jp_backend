@@ -6,22 +6,22 @@ const fs = require('fs');
 const jwt = require('jsonwebtoken');
 
 const walletController = require('../controllers/walletController');
-const Transaction = require('../models/Transaction'); // Direct DB access ke liye
+const Transaction = require('../models/Transaction');
 
-// 📁 Uploads folder check & create (Taake app crash na ho)
+// 📁 Uploads folder check & create
 const uploadDir = './uploads/deposits/';
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// 📸 Multer Storage Setup (Image save karne ka mechanism)
+// 📸 Multer Storage Setup
 const storage = multer.diskStorage({
     destination: uploadDir,
     filename: (req, file, cb) => cb(null, 'slip-' + Date.now() + path.extname(file.originalname))
 });
 const upload = multer({ storage });
 
-// 🛡️ Auth Middleware (User ko verify karne ke liye)
+// 🛡️ Auth Middleware
 const auth = (req, res, next) => {
     const token = req.header('Authorization');
     if (!token) return res.status(401).json({ success: false, message: 'Access Denied! No token provided.' });
@@ -34,30 +34,21 @@ const auth = (req, res, next) => {
     }
 };
 
-// --- EXISTING ROUTES (Aap ke purane) ---
-// 1. Transaction History dekhna
+// --- EXISTING ROUTES ---
 router.get('/history/:username', walletController.getTransactionHistory);
-
-// 2. User: Withdraw Request bhejna
-router.post('/withdraw-request', walletController.requestWithdraw);
-
-// 3. Admin: Withdraw Status Update karna
-router.post('/admin/withdraw-update', walletController.updateWithdrawStatus);
-
+router.post('/withdraw-request', auth, walletController.requestWithdraw);
+router.post('/admin/withdraw-update', auth, walletController.updateWithdrawStatus);
 
 // ==========================================
 // 🚀 NAYE ROUTES (Secure Deposit System) 🚀
 // ==========================================
 
-// ✨ 4. User: Deposit Request Bhejna (Image Slip + TRC20 Hash ke sath)
+// ✨ User: Deposit Request Bhejna (Image Slip ke sath)
 router.post('/deposit-request', auth, upload.single('slip'), async (req, res) => {
     try {
         const { amount, method, trxId } = req.body;
-        
-        // Agar file aayi hai toh uska URL banayen, warna khali chor dein
         const slipUrl = req.file ? `/uploads/deposits/${req.file.filename}` : 'No Slip Attached';
         
-        // Transaction Database mein Pending status se save karein
         await Transaction.create({
             userId: req.user.id,
             type: 'deposit',
@@ -68,15 +59,11 @@ router.post('/deposit-request', auth, upload.single('slip'), async (req, res) =>
 
         res.status(200).json({ success: true, message: 'Request sent successfully! ✅' });
     } catch (err) { 
-        console.error("Deposit Error:", err);
         res.status(500).json({ success: false, message: "Error submitting deposit." }); 
     }
 });
 
-// 5. Admin: Saari Pending Deposit Requests dekhna
 router.get('/admin/pending-deposits', walletController.getPendingDeposits);
-
-// 6. Admin: Deposit Approve karna (Safe tareeqay se)
 router.post('/admin/approve-deposit', walletController.approveDeposit);
 
 module.exports = router;

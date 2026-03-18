@@ -11,7 +11,7 @@ const usersSchema = new mongoose.Schema({
     wallets: {
         deposit: { type: Number, default: 0 },
         win: { type: Number, default: 0 },
-        // ✨ FIX: 0.05 (Dollar) se change kar ke 0 kar diya gaya hai
+        bonus: { type: Number, default: 0 }, // ✨ FIX: Bonus wallet added
         reward: { type: Number, default: 0 } 
     },
     totalEarning: { type: Number, default: 0 },
